@@ -24,14 +24,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
 
-Issuer.discover('https://nodejs-sample.criipto.id')
-  .then(criiptoIssuer => {
-    var client = new criiptoIssuer.Client({
-      client_id: 'urn:criipto:nodejs:demo:1010',
-      client_secret: 'j9wYVyD3zXZPMo3LTq/xSU/sMu9/shiFKpTHKfqAutM=',
+Issuer.discover('http://localhost:3333')
+  .then(myIssuer => {
+    var client = new myIssuer.Client({
+      client_id: 'oidcCLIENT',
+      client_secret: 'secret',
       redirect_uris: [ 'http://localhost:3000/auth/callback' ],
+      // response_types: ['code', 'id_token'], // without code is default
       post_logout_redirect_uris: [ 'http://localhost:3000/logout/callback' ],
-      token_endpoint_auth_method: 'client_secret_post'
+      token_endpoint_auth_method: 'client_secret_post',
+      // scope: 'openid email profile' // put here doesn't work, must put in passport authentication auguments
     });
 
     app.use(
@@ -62,7 +64,9 @@ Issuer.discover('https://nodejs-sample.criipto.id')
 
     // start authentication request
     app.get('/auth', (req, res, next) => {
-      passport.authenticate('oidc', { acr_values: 'urn:grn:authn:no:bankid' })(req, res, next);
+      passport.authenticate('oidc', 
+        { scope: 'openid email profile' } // scope openid is minimum or causing Error in callback: id_token not present in TokenSet
+      )(req, res, next);
     });
 
     // authentication callback
@@ -77,11 +81,21 @@ Issuer.discover('https://nodejs-sample.criipto.id')
 
     // start logout request
     app.get('/logout', (req, res) => {
-      res.redirect(client.endSessionUrl());
+      client.endSessionUrl()
+      req.logout()
+      cookie = req.cookies;
+      for (var prop in cookie) {
+          if (!cookie.hasOwnProperty(prop)) {
+              continue;
+          }    
+          res.cookie(prop, '', {expires: new Date(0)});
+      }
+      res.redirect('/');
     });
 
     // logout callback
     app.get('/logout/callback', (req, res) => {
+      console.log(res)
       // clears the persisted user from the local storage
       req.logout();
       // redirects the user to a public route
